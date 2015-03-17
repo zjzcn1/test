@@ -18,8 +18,6 @@ public class TestCuratorLock {
 	 * @throws InterruptedException
 	 */
 	public static void main(String[] args) throws InterruptedException {
-		// TODO Auto-generated method stub
-
 		CountDownLatch latch = new CountDownLatch(5);
 
 		String zookeeperConnectionString = "localhost:2181,localhost:2182,localhost:2183";
