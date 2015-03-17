@@ -10,8 +10,9 @@ import org.apache.catalina.startup.Tomcat;
  * Created by nil on 2014/8/1. 
  */  
 public class TomcatEmbedTest {  
-    private Tomcat tomcat;  
-    private void startTomcat(int port,String contextPath,String baseDir) throws ServletException, LifecycleException {  
+    private Tomcat tomcat; 
+    
+    public void startTomcat(int port,String contextPath,String baseDir) throws ServletException, LifecycleException {  
         tomcat = new Tomcat();  
         tomcat.setPort(port);  
         tomcat.setBaseDir(".");  
@@ -19,12 +20,14 @@ public class TomcatEmbedTest {
         AprLifecycleListener listener = new AprLifecycleListener();  
         server.addLifecycleListener(listener);  
         tomcat.addWebapp(contextPath, baseDir);  
-        tomcat.start();  
-        
-    }  
-    private void stopTomcat() throws LifecycleException {  
+        tomcat.start();
+        tomcat.getServer().await();
+    }
+    
+    public void stopTomcat() throws LifecycleException {  
         tomcat.stop();  
-    }  
+    } 
+    
     public static void main(String[] args) {  
         try {  
             int port=8080;  
@@ -33,9 +36,8 @@ public class TomcatEmbedTest {
             TomcatEmbedTest tomcat = new TomcatEmbedTest();  
             tomcat.startTomcat(port, contextPath, baseDir);  
             //由于Tomcat的start方法为非阻塞方法,加一个线程睡眠模拟线程阻塞.  
-            Thread.sleep(10000000);
         } catch (Exception e) {  
-            e.printStackTrace();  
+            e.printStackTrace(); 
         }  
     }  
 }  
