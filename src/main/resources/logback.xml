@@ -22,7 +22,7 @@
     <logger name="java.sql.Connection" level="DEBUG"/>
     <logger name="java.sql.ResultSet" level="INFO"/>
     <logger name="com.boaotech.util" level="DEBUG"/>
-    <root level="TRACE">
+    <root level="INFO">
         <appender-ref ref="STDOUT"/>
         <!-- appender-ref ref="FILE" / -->
     </root>
