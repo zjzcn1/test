@@ -2,9 +2,8 @@ package com.zjzcn.test.tensorflow;
 
 
 import com.alibaba.fastjson.JSON;
-import org.bytedeco.javacpp.opencv_core;
-import org.bytedeco.javacpp.opencv_core.Mat;
-import org.bytedeco.javacpp.opencv_core.Size;
+import org.opencv.core.Mat;
+import org.opencv.core.Size;
 import org.tensorflow.Graph;
 import org.tensorflow.Session;
 import org.tensorflow.Tensor;
@@ -15,29 +14,24 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import static org.bytedeco.javacpp.opencv_imgcodecs.imread;
-import static org.bytedeco.javacpp.opencv_imgproc.COLOR_RGB2GRAY;
-import static org.bytedeco.javacpp.opencv_imgproc.INTER_AREA;
-import static org.bytedeco.javacpp.opencv_imgproc.cvtColor;
-import static org.bytedeco.javacpp.opencv_imgproc.resize;
+import static org.opencv.imgcodecs.Imgcodecs.imread;
+import static org.opencv.imgproc.Imgproc.COLOR_RGB2GRAY;
+import static org.opencv.imgproc.Imgproc.INTER_AREA;
+import static org.opencv.imgproc.Imgproc.cvtColor;
+import static org.opencv.imgproc.Imgproc.resize;
 
 
 public class RobotTest {
     public static void main(String[] args) {
-        Size dsize = new opencv_core.Size(32, 32); // 设置新图片的大小
+        Size dsize = new Size(32, 32); // 设置新图片的大小
         Mat img = imread("/Users/zjz/workspace/test/src/main/resources/2_1.jpg", 1);
         Mat grayMat = new Mat();
         cvtColor(img, grayMat, COLOR_RGB2GRAY);
         Mat resizedImg = new Mat();
         resize(grayMat,resizedImg,dsize, 0, 0, INTER_AREA);
-        System.out.println(resizedImg.size().height() + ", " + resizedImg.size().width());
+        System.out.println(resizedImg.size().height + ", " + resizedImg.size().width);
         int bufferSize = resizedImg.channels() * resizedImg.cols() * resizedImg.rows();
         float[] imageBuf = new float[bufferSize];
-
-        for(int i = 0; i < bufferSize; i++) {
-            int imgByte = resizedImg.data().get(i) & 0xFF;
-            imageBuf[i] = (float)(imgByte/255.0);
-        }
 
         String modelDir = "/Users/zjz/workspace/test/src/main/resources";
         byte[] graphDef = null;

@@ -9,6 +9,7 @@ import com.zjzcn.test.control.waterapi.VectorUtils;
 import com.zjzcn.test.control.waterapi.WaterApi;
 import com.zjzcn.test.util.ThreadUtil;
 import com.zjzcn.test.util.Tuple;
+import org.apache.commons.math3.linear.ArrayRealVector;
 import org.apache.commons.math3.linear.RealVector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,7 +17,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 public class BaseControl {
 
@@ -24,24 +24,20 @@ public class BaseControl {
 
 
     private static final int MOVE_MAX_STEP = 30; // 移动的最大步数
-    private static final double MOVE_MIN_RAD = 0.3; // 弧度
-    private static final double STOP_MIN_RAD = 0.04; // 弧度
-    private static final double STOP_MIN_DIS = 0.03; // 米
+    private static final double MOVE_MIN_RAD = 0.1; // 弧度
+    private static final double STOP_MIN_RAD = 0.05; // 弧度
+    private static final double STOP_MIN_DIS = 0.05; // 米
 
     private WaterApi waterApi;
 
     private boolean isStop = true;
 
-    public enum MoveStatus {
-        idle,
-        running,
-        failed,
-        succeeded,
-        canceled
-    }
-
     public BaseControl() {
 
+    }
+
+    public WaterApi getWaterApi() {
+        return waterApi;
     }
 
     public void init(String serverHost, int serverPort) {
@@ -56,20 +52,20 @@ public class BaseControl {
         waterApi.moveToMarker(markerName);
     }
 
-    public boolean paddingMoveOk(String markerName) {
+    public boolean waitToMoveSucceeded(String markerName) {
         isStop = false;
         while (!isStop) {
-            if (isMoveOk(markerName)) {
+            if (isMoveSucceeded(markerName)) {
                 return true;
             }
             else {
-                ThreadUtil.sleep(100);
+                ThreadUtil.sleep(1000);
             }
         }
         return false;
     }
 
-    public boolean isMoveOk(String markerName) {
+    public boolean isMoveSucceeded(String markerName) {
         JSONObject robotStatus = getRobotStatus();
 
         String move_status = robotStatus.getString("move_status");
@@ -77,26 +73,19 @@ public class BaseControl {
         return "succeeded".equals(move_status) && markerName.equals(move_target);
     }
 
-    public MoveStatus getMoveStatus() {
-        JSONObject robotStatus = getRobotStatus();
-
-        String move_status = robotStatus.getString("move_status");
-        return MoveStatus.valueOf(move_status);
-    }
-
     public void moveAndTuningToMarker(String markerName) {
         moveToMarker(markerName);
 
-        if (paddingMoveOk(markerName)) {
+        if (waitToMoveSucceeded(markerName)) {
             //机器人自动移动后进行微调
             tuningRobot(markerName);
         }
     }
 
-    public void moveAndPaddingToMarker(String markerName) {
+    public void moveAndWaitToMarker(String markerName) {
         moveToMarker(markerName);
 
-        paddingMoveOk(markerName);
+        waitToMoveSucceeded(markerName);
     }
 
     private void tuningRobot(String markerName) {
@@ -125,7 +114,7 @@ public class BaseControl {
         log.info("初始夹角3 -> [{}]rad.", angle);
         while (Math.abs(angle) > MOVE_MIN_RAD) {
             log.info("开始调整:{}", angle > 0 ? "左转" : "右转");
-            waterApi.joyControl(0, angle);
+            moveRobotAndWaitMS(0, angle, 500);
             angle = diffAngleWithMove(markerName);
             log.info("初始夹角1 -> [{}]rad.", angle);
             angle = MathUtils.turnTo180(angle, cosMTR);
@@ -135,6 +124,10 @@ public class BaseControl {
         }
     }
 
+    private void moveRobotAndWaitMS(double linearVelocity, double angularVelocity, long ms) {
+        waterApi.joyControl(linearVelocity, angularVelocity);
+        ThreadUtil.sleep(ms);
+    }
     /**
      * 微调机器人位置
      */
@@ -153,13 +146,17 @@ public class BaseControl {
 
             double cosMTR = cosTheta(markerName);
             log.info("角度调整后的cos:{}", cosMTR);
+
+            // 调整距离
+            distance = diffDistance(markerName);
+            log.info("调整前的【距离】为:{}m.", distance);
             if (cosMTR >= 0) {
-                waterApi.joyControl(distance, 0);
+                moveRobotAndWaitMS(distance, 0, 1000);
             } else {
-                waterApi.joyControl(-distance, 0);
+                moveRobotAndWaitMS(-distance, 0, 1000);
             }
             distance = diffDistance(markerName);
-            log.info("调整后的距离为:{}m.", distance);
+            log.info("调整后的【距离】为:{}m.", distance);
             i++;
         }
     }
@@ -178,12 +175,9 @@ public class BaseControl {
 //            angle = angle > 1 ? 1 : angle;
 //            angle = angle < -1 ? -1 : angle;
             log.info("开始调整:{}", angle > 0 ? "左转" : "右转");
-            waterApi.joyControl(0, angle);
-            try {
-                TimeUnit.SECONDS.sleep(1);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            // joy control
+            moveRobotAndWaitMS(0, angle, 1000);
+
             angle = diffAngleWithMarker(markerName);
             log.info("恢复后的夹角1 -> [{}]rad.", angle);
             angle = MathUtils.turnToAcuteAngle(angle);
@@ -200,10 +194,22 @@ public class BaseControl {
     private double cosTheta(String markerName) {
         RealVector moveVector = robotToMarkerVector(markerName);
 
-        JSONObject rbPos = getRobotStatus().getJSONObject(Constants.CURRENT_POSE);
-        RealVector robotVector = VectorUtils.newVector(rbPos.getDoubleValue(Constants.X), rbPos.getDoubleValue(Constants.Y));
+        double theta = getRobotTheta();
+        RealVector robotVector = getUnitVector(theta);
 
         return moveVector.dotProduct(robotVector) / (moveVector.getNorm() * robotVector.getNorm());
+    }
+
+    private double getRobotTheta() {
+        double theta = getRobotStatus().getJSONObject("current_pose").getDoubleValue("theta");
+        return theta;
+    }
+
+
+    private RealVector  getUnitVector(double angle) {
+        double vec_y = Math.sin(angle);
+        double vec_x = Math.cos(angle);
+        return new ArrayRealVector(new double[]{vec_x,vec_y});
     }
 
     /**
@@ -213,7 +219,7 @@ public class BaseControl {
         RealVector moveVector = robotToMarkerVector(markerName);
 
         double moveTheta = Math.atan2(moveVector.toArray()[1], moveVector.toArray()[0]);
-        double robotTheta = getRobotStatus().getJSONObject(Constants.CURRENT_POSE).getDoubleValue(Constants.THETA);
+        double robotTheta = getRobotTheta();
 
         double moveThetaP = MathUtils.turnTo0_360(moveTheta);
         double robotThetaP = MathUtils.turnTo0_360(robotTheta);
@@ -237,12 +243,25 @@ public class BaseControl {
     /**
      * 坐标向量减机器人向量
      */
+//    private RealVector robotToMarkerVector(String markerName) {
+//        JSONObject rbPos = getRobotStatus().getJSONObject(Constants.CURRENT_POSE);
+//        JSONObject mkPos = getMarkerList().getJSONObject(markerName).getJSONObject(Constants.POSE).getJSONObject(Constants.POSITION);
+//        return VectorUtils.assemblyVector(mkPos, rbPos);
+//    }
+
+    /**
+     * 坐标向量减机器人向量
+     */
     private RealVector robotToMarkerVector(String markerName) {
         JSONObject rbPos = getRobotStatus().getJSONObject(Constants.CURRENT_POSE);
+        double robotX = rbPos.getDoubleValue("x");
+        double robotY = rbPos.getDoubleValue("y");
         JSONObject mkPos = getMarkerList().getJSONObject(markerName).getJSONObject(Constants.POSE).getJSONObject(Constants.POSITION);
-        return VectorUtils.assemblyVector(mkPos, rbPos);
-    }
+        double mkX = mkPos.getDoubleValue("x");
+        double mkY = mkPos.getDoubleValue("y");
 
+        return new ArrayRealVector(new double[]{(mkX-robotX), (mkY-robotY)});
+    }
 
     /**
      * 计算机器人与标记点的方位差
@@ -314,6 +333,7 @@ public class BaseControl {
         }
         return waterApi.getClient().isConnected();
     }
+
     public static void main(String[] args) {
         BaseControl baseControl = new BaseControl();
         baseControl.init("192.168.10.10", 31001);
@@ -342,7 +362,11 @@ public class BaseControl {
 
 //        baseControl.tuningRobotLocation("test1");
 //        baseControl.tuningRobot("test1");
-        baseControl.moveAndTuningToMarker("test1");
+//        baseControl.moveAndTuningToMarker("marker1");
+//        baseControl.getWaterApi().deleteMarker("marker2");
+        baseControl.getWaterApi().deleteMarker("marker1");
+        ThreadUtil.sleep(1000);
+        baseControl.getWaterApi().insertMarker("marker1", "0");
     }
 }
 

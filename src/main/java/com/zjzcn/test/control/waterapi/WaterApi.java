@@ -1,5 +1,6 @@
 package com.zjzcn.test.control.waterapi;
 
+import com.zjzcn.test.control.WaterCodec;
 import com.zjzcn.test.control.transport.Client;
 import com.zjzcn.test.control.transport.NettyClient;
 import com.zjzcn.test.control.transport.Request;
@@ -22,7 +23,7 @@ public class WaterApi {
     }
 
     public WaterApi(String serverHost, int serverPort) {
-        client = new NettyClient(serverHost, serverPort);
+        client = new NettyClient(serverHost, serverPort, new WaterCodec());
     }
 
     private String send(String command, Map<String, Object> params) {
@@ -86,6 +87,11 @@ public class WaterApi {
         return response;
     }
 
+    public String getParams() {
+        String response = send("/api/get_params");
+        return response;
+    }
+
     public String markerList() {
         String response = send("/api/markers/query_list");
 
@@ -98,6 +104,23 @@ public class WaterApi {
         return response;
     }
 
+    public String insertMarker(String name, String type) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("name", name);
+        params.put("type", type);
+        String response = send("/api/markers/insert", params);
+
+        return response;
+    }
+
+
+    public String deleteMarker(String name) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("name", name);
+        String response = send("/api/markers/delete", params);
+
+        return response;
+    }
 
     public static void main(String[] args) {
 
@@ -105,6 +128,11 @@ public class WaterApi {
 
         String s = waterApi.robotStatus();
         System.out.println(s);
+
+        String s1 = waterApi.getParams();
+        System.out.println(s1);
+
+        waterApi.joyControl(0.1, 0);
 
 //        String test1 = waterApi.moveToMarker("test1");
 //        System.out.println(test1);

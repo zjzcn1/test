@@ -3,6 +3,7 @@ package com.zjzcn.test.control.transport;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
@@ -13,6 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.SocketAddress;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class NettyClient implements Client{
@@ -36,7 +39,11 @@ public class NettyClient implements Client{
 
 	private boolean isConnecting = false;
 
-	public NettyClient(String serverHost, int serverPort) {
+    public NettyClient(String serverHost, int serverPort, Codec codec) {
+        this(serverHost, serverPort, codec, null);
+    }
+
+	public NettyClient(String serverHost, int serverPort, Codec codec, Handler handler) {
 		this.serverHost = serverHost;
 		this.serverPort = serverPort;
 
@@ -44,17 +51,30 @@ public class NettyClient implements Client{
 
 		bootstrap = new Bootstrap();
 		eventLoopGroup = new NioEventLoopGroup();
-		bootstrap.group(eventLoopGroup)
-		.channel(NioSocketChannel.class)
-		.handler(new ChannelInitializer<SocketChannel>() {
-			@Override
-			public void initChannel(SocketChannel ch) throws Exception {
-				ChannelPipeline pipeline = ch.pipeline();
-				pipeline.addLast("encoder", new NettyEncoder());
-				pipeline.addLast("decoder", new NettyDecoder());
-				pipeline.addLast("handler", new NettyClientHandler(callbackManager));
-			}
-		});
+        bootstrap.group(eventLoopGroup);
+        bootstrap.channel(NioSocketChannel.class);
+        bootstrap.handler(new ChannelInitializer<SocketChannel>() {
+            @Override
+            public void initChannel(SocketChannel ch) throws Exception {
+                ChannelPipeline pipeline = ch.pipeline();
+                pipeline.addLast("encoder", new NettyEncoder(codec));
+                pipeline.addLast("decoder", new NettyDecoder(codec));
+
+                List<Handler> handlers = new ArrayList<>();
+                handlers.add(new Handler<ChannelHandlerContext, Object>() {
+                    @Override
+                    public void handle(ChannelHandlerContext ctx, Object msg) {
+                        if (msg instanceof Response) {
+                            handleResponse((Response)msg);
+                        }
+                    }
+                });
+                if (handler != null) {
+                    handlers.add(handler);
+                }
+                pipeline.addLast("handler", new NettyHandler(handlers));
+            }
+        });
 
         doConnect();
 
@@ -166,5 +186,18 @@ public class NettyClient implements Client{
 	public SocketAddress getRemoteAddress() {
 		return remoteAddress;
 	}
-	
+
+    private void handleResponse(Response response) {
+        ResponseFuture responseFuture = callbackManager.removeCallback(response.getRequestId());
+        if (responseFuture == null) {
+            logger.warn("Client has response from server, but responseFuture not exist,  requestId={}", response.getRequestId());
+            return;
+        }
+
+        if (response.getException() != null) {
+            responseFuture.onFailure(response);
+        } else {
+            responseFuture.onSuccess(response);
+        }
+    }
 }

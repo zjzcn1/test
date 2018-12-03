@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit;
 
 public class CallbackManager {
 
-    private static Logger logger = LoggerFactory.getLogger(NettyClient.class);
+    private static Logger logger = LoggerFactory.getLogger(CallbackManager.class);
 
     public static final int CLIENT_MAX_REQUEST = 2000;
     public static final int TIMEOUT_CHECK_MS = 100;
