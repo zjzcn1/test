@@ -5,6 +5,8 @@
 target/
 devenv
 *.log*
+log/*
+logs/*
 *.iml
 .idea/
 *.versionsBackup
