@@ -16,15 +16,12 @@ public class GraphLogger {
 
     private static final String GRAPH_PNG_LOG_FILE = "log/graph.png";
 
-    public static void logGraph(DirectedGraph<String, Handler, Void> graph) {
+    public static void logGraph(DirectedGraph<String, NodeInfo> graph) {
         MutableGraph g = Factory.mutGraph().setDirected(true);
         for (String nodeId : graph.getNodes()) {
             MutableNode node = Factory.mutNode(nodeId);
             if (graph.isStartNode(nodeId)) {
                 node.add(Color.BLUE);
-            }
-            if (graph.isEndNode(nodeId)) {
-                node.add(Color.RED);
             }
             if (graph.isEndNode(nodeId)) {
                 node.add(Color.RED);

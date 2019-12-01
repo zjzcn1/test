@@ -3,7 +3,7 @@ package com.zjzcn.test.graph;
 
 public interface Handler {
 
-    String handle(String param);
+    String handle(String nodeId, String param);
 
 }
 

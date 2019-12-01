@@ -1,0 +1,47 @@
+{
+  "name": "compute-demo",
+  "nodes": [
+    {
+      "code": "AAAA.A"
+    },
+    {
+      "code": "BBBB.B",
+      "mappings": {
+        "b": "@{AAAA.A}.${b}"
+      }
+    },
+    {
+      "code": "BBBB.C",
+      "mappings": {
+        "c": "@{AAAA.A}.${c}"
+      }
+    },
+    {
+      "code": "BBBB.D",
+      "mappings": {
+        "b": "@{BBBB.B}.${b2}",
+        "c": "@{BBBB.C}.${c3}",
+        "d": "@{AAAA.A}.${d}"
+      }
+    },
+    {
+      "code": "BBBB.E",
+      "mappings": {
+        "e": "@{BBBB.D}.${sum}"
+      }
+    },
+    {
+      "code": "BBBB.F",
+      "mappings": {
+        "f": "@{BBBB.D}.${sum}"
+      }
+    },
+    {
+      "code": "ZZZZ.Z",
+      "mappings": {
+        "r1": "@{BBBB.E}.${inc1}",
+        "r2": "@{BBBB.F}.${inc2}"
+      }
+    }
+  ]
+}

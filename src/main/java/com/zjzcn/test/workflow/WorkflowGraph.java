@@ -1,4 +1,4 @@
-package com.zjzcn.test.graph;
+package com.zjzcn.test.workflow;
 
 import org.apache.commons.collections4.keyvalue.MultiKey;
 import org.apache.commons.collections4.map.MultiKeyMap;
@@ -7,65 +7,56 @@ import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.*;
 
-public class DirectedGraph<Node, NodeInfo> implements Iterable<Node> {
+public class WorkflowGraph<NodeId, NodeInfo> implements Iterable<NodeId> {
 
-    private volatile Map<Node, NodeInfo> nodeMap = new HashMap<>();
-    private volatile MultiKeyMap<Node, Void> edgeMap = new MultiKeyMap<>();
+    private volatile Map<NodeId, NodeInfo> nodeMap = new HashMap<>();
+    private volatile MultiKeyMap<NodeId, Void> edgeMap = new MultiKeyMap<>();
 
-    private String name;
 
-    public DirectedGraph() {
+    public WorkflowGraph() {
     }
 
-    public DirectedGraph(String name) {
-        this.name = name;
-    }
-
-    public String name() {
-        return name;
-    }
-
-    public void addNode(Node node, NodeInfo nodeInfo) {
+    public void addNode(NodeId node, NodeInfo nodeInfo) {
         Objects.requireNonNull(node);
         nodeMap.put(node, nodeInfo);
     }
 
-    public void addEdge(Node sourceNode, Node targetNode) {
-        Objects.requireNonNull(sourceNode);
-        Objects.requireNonNull(targetNode);
-        if (hasCycleForAddEdge(sourceNode, targetNode)) {
-            throw new IllegalArgumentException(String.format("Edge(%s -> %s) has a cycle.", sourceNode, targetNode));
+    public void addEdge(NodeId fromNode, NodeId toNode) {
+        Objects.requireNonNull(fromNode);
+        Objects.requireNonNull(toNode);
+        if (hasCycleForAddEdge(fromNode, toNode)) {
+            throw new IllegalArgumentException(String.format("Edge(%s -> %s) has a cycle.", fromNode, toNode));
         }
-        edgeMap.put(sourceNode, targetNode, null);
+        edgeMap.put(fromNode, toNode, null);
     }
 
-    public List<Node> getNodes() {
+    public List<NodeId> getNodes() {
         return new ArrayList<>(nodeMap.keySet());
     }
 
-    public List<Pair<Node, Node>> getEdges() {
-        List<Pair<Node, Node>> edges = new ArrayList<>();
-        for (MultiKey<? extends Node> key : edgeMap.keySet()) {
-            Node sourceNode = key.getKey(0);
-            Node targetNode = key.getKey(1);
-            edges.add(new ImmutablePair<>(sourceNode, targetNode));
+    public List<Pair<NodeId, NodeId>> getEdges() {
+        List<Pair<NodeId, NodeId>> edges = new ArrayList<>();
+        for (MultiKey<? extends NodeId> key : edgeMap.keySet()) {
+            NodeId fromNode = key.getKey(0);
+            NodeId toNode = key.getKey(1);
+            edges.add(new ImmutablePair<>(fromNode, toNode));
         }
         return edges;
     }
 
-    public boolean containsNode(Node node) {
+    public boolean containsNode(NodeId node) {
         Objects.requireNonNull(node);
         return nodeMap.containsKey(node);
     }
 
-    public boolean containsEdge(Node sourceNode, Node targetNode) {
-        Objects.requireNonNull(sourceNode);
-        Objects.requireNonNull(targetNode);
-        return edgeMap.containsKey(sourceNode, targetNode);
+    public boolean containsEdge(NodeId fromNode, NodeId toNode) {
+        Objects.requireNonNull(fromNode);
+        Objects.requireNonNull(toNode);
+        return edgeMap.containsKey(fromNode, toNode);
     }
 
 
-    public NodeInfo getNodeInfo(Node node) {
+    public NodeInfo getNodeInfo(NodeId node) {
         Objects.requireNonNull(node);
         return nodeMap.get(node);
     }
@@ -80,30 +71,30 @@ public class DirectedGraph<Node, NodeInfo> implements Iterable<Node> {
         return edgeMap.size();
     }
 
-    public boolean isStartNode(Node node) {
+    public boolean isStartNode(NodeId node) {
         Objects.requireNonNull(node);
         return node.equals(getStartNode());
     }
 
-    public boolean isEndNode(Node node) {
+    public boolean isEndNode(NodeId node) {
         Objects.requireNonNull(node);
         return node.equals(getEndNode());
     }
 
-    public boolean isForkNode(Node node) {
+    public boolean isForkNode(NodeId node) {
         Objects.requireNonNull(node);
         return getNextNodes(node).size() > 1;
     }
 
-    public boolean isJoinNode(Node node) {
+    public boolean isJoinNode(NodeId node) {
         Objects.requireNonNull(node);
         return getPrevNodes(node).size() > 1;
     }
 
-    public int toNextJoinNodeStep(Node node) {
+    public int toNextJoinNodeStep(NodeId node) {
         Objects.requireNonNull(node);
         int step = 0;
-        List<Node> nodes;
+        List<NodeId> nodes;
         do {
             nodes = getNextNodes(node);
             if (nodes.size() == 1) {
@@ -113,9 +104,9 @@ public class DirectedGraph<Node, NodeInfo> implements Iterable<Node> {
         return step;
     }
 
-    public Node getStartNode() {
-        List<Node> nodes = new ArrayList<>();
-        for (Node node : nodeMap.keySet()) {
+    public NodeId getStartNode() {
+        List<NodeId> nodes = new ArrayList<>();
+        for (NodeId node : nodeMap.keySet()) {
             if (getPrevNodes(node).isEmpty()) {
                 nodes.add(node);
             }
@@ -124,15 +115,15 @@ public class DirectedGraph<Node, NodeInfo> implements Iterable<Node> {
             return null;
         }
         if (nodes.size() != 1) {
-            throw new IllegalStateException(String.format("Can not have many start node(size=%s) in graph.", nodes.size()));
+            throw new IllegalStateException(String.format("There can only be one start node(size=%s) in graph.", nodes.size()));
         }
         return nodes.get(0);
     }
 
 
-    public Node getEndNode() {
-        List<Node> nodes = new ArrayList<>();
-        for (Node node : nodeMap.keySet()) {
+    public NodeId getEndNode() {
+        List<NodeId> nodes = new ArrayList<>();
+        for (NodeId node : nodeMap.keySet()) {
             if (getNextNodes(node).isEmpty()) {
                 nodes.add(node);
             }
@@ -141,30 +132,30 @@ public class DirectedGraph<Node, NodeInfo> implements Iterable<Node> {
             return null;
         }
         if (nodes.size() > 1) {
-            throw new IllegalStateException(String.format("Can not have many end node(size=%s) in graph.", nodes.size()));
+            throw new IllegalStateException(String.format("There can only be one end node(size=%s) in graph.", nodes.size()));
         }
         return nodes.get(0);
     }
 
 
-    public List<Node> getPrevNodes(Node node) {
+    public List<NodeId> getPrevNodes(NodeId node) {
         Objects.requireNonNull(node);
-        List<Node> nodes = new ArrayList<>();
-        for (MultiKey<? extends Node> key : edgeMap.keySet()) {
-            Node targetNode = key.getKey(1);
-            if (targetNode.equals(node)) {
+        List<NodeId> nodes = new ArrayList<>();
+        for (MultiKey<? extends NodeId> key : edgeMap.keySet()) {
+            NodeId toNode = key.getKey(1);
+            if (toNode.equals(node)) {
                 nodes.add(key.getKey(0));
             }
         }
         return nodes;
     }
 
-    public List<Node> getNextNodes(Node node) {
+    public List<NodeId> getNextNodes(NodeId node) {
         Objects.requireNonNull(node);
-        List<Node> nodes = new ArrayList<>();
-        for (MultiKey<? extends Node> key : edgeMap.keySet()) {
-            Node sourceNode = key.getKey(0);
-            if (sourceNode.equals(node)) {
+        List<NodeId> nodes = new ArrayList<>();
+        for (MultiKey<? extends NodeId> key : edgeMap.keySet()) {
+            NodeId fromNode = key.getKey(0);
+            if (fromNode.equals(node)) {
                 nodes.add(key.getKey(1));
             }
         }
@@ -172,16 +163,16 @@ public class DirectedGraph<Node, NodeInfo> implements Iterable<Node> {
     }
 
 
-    private boolean hasCycleForAddEdge(Node sourceNode, Node targetNode) {
-        Queue<Node> queue = new LinkedList<>();
-        queue.add(targetNode);
+    private boolean hasCycleForAddEdge(NodeId fromNode, NodeId toNode) {
+        Queue<NodeId> queue = new LinkedList<>();
+        queue.add(toNode);
 
         int nodeCount = this.getNodeCount();
         while (!queue.isEmpty() && (--nodeCount > 0)) {
-            Node node = queue.poll();
+            NodeId node = queue.poll();
 
-            for (Node nextNode : getNextNodes(node)) {
-                if (nextNode.equals(sourceNode)) {
+            for (NodeId nextNode : getNextNodes(node)) {
+                if (nextNode.equals(fromNode)) {
                     return true;
                 }
                 queue.add(nextNode);
@@ -192,17 +183,17 @@ public class DirectedGraph<Node, NodeInfo> implements Iterable<Node> {
     }
 
     @Override
-    public Iterator<Node> iterator() {
+    public Iterator<NodeId> iterator() {
         return new GraphItr();
     }
 
-    private class GraphItr implements Iterator<Node> {
+    private class GraphItr implements Iterator<NodeId> {
 
-        private Queue<Node> queue = new LinkedList<>();
-        private Map<Node, Integer> notZeroIndegreeNodeMap = new HashMap<>();
+        private Queue<NodeId> queue = new LinkedList<>();
+        private Map<NodeId, Integer> notZeroIndegreeNodeMap = new HashMap<>();
 
         GraphItr() {
-            for (Node node : nodeMap.keySet()) {
+            for (NodeId node : nodeMap.keySet()) {
                 int inDegree = getPrevNodes(node).size();
                 if (inDegree == 0) {
                     queue.add(node);
@@ -216,10 +207,10 @@ public class DirectedGraph<Node, NodeInfo> implements Iterable<Node> {
             return !queue.isEmpty();
         }
 
-        public Node next() {
-            Node node = queue.poll();
-            List<Node> nextNodes = getNextNodes(node);
-            for (Node nextNode : nextNodes) {
+        public NodeId next() {
+            NodeId node = queue.poll();
+            List<NodeId> nextNodes = getNextNodes(node);
+            for (NodeId nextNode : nextNodes) {
                 Integer inDegree = notZeroIndegreeNodeMap.get(nextNode);
                 inDegree--;
                 if (inDegree == 0) {
@@ -234,7 +225,7 @@ public class DirectedGraph<Node, NodeInfo> implements Iterable<Node> {
     }
 
     public static void main(String[] args) {
-        DirectedGraph<String, String> graph = new DirectedGraph<>();
+        WorkflowGraph<String, String> graph = new WorkflowGraph<>();
         graph.addNode("AAAA.A", "startNode");
         graph.addNode("AAAB.A", "node1");
         graph.addNode("AAAC.A", "node1");

@@ -1,16 +1,22 @@
 package com.zjzcn.test.graph;
 
+
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class HttpHandler implements Handler {
 
-    private HttpClient client = new HttpClient("http://www.baidu.com");
-    @Override
-    public String handle(String param) {
-        System.out.println("http--->" + param);
-//        System.out.println(client.get("/"));
-        return  param + "=ok --> ";
+    private HttpClient client;
+
+    public HttpHandler(String url) {
+         client = new HttpClient(url);
     }
 
-    public static void main(String[] args) throws Exception {
-        new HttpHandler().handle("xxxx");
+    @Override
+    public String handle(String nodeId, String param) {
+        log.info("[http] ---> node={}, body={}", nodeId, param);
+        String resp = client.post(String.format("brick?code=%s", nodeId), param);
+        log.info("[http] <--- resp={}", resp);
+        return  resp;
     }
 }
