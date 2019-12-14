@@ -1,19 +1,26 @@
-package com.zjzcn.test.workflow;
+package com.zjzcn.test;
 
 import org.apache.commons.collections4.keyvalue.MultiKey;
 import org.apache.commons.collections4.map.MultiKeyMap;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Queue;
 
-public class WorkflowGraph<NodeId, NodeInfo> implements Iterable<NodeId> {
+
+public class Digraph<NodeId, NodeInfo> implements Iterable<NodeId> {
 
     private volatile Map<NodeId, NodeInfo> nodeMap = new HashMap<>();
     private volatile MultiKeyMap<NodeId, Void> edgeMap = new MultiKeyMap<>();
 
-
-    public WorkflowGraph() {
+    public Digraph() {
     }
 
     public void addNode(NodeId node, NodeInfo nodeInfo) {
@@ -24,9 +31,6 @@ public class WorkflowGraph<NodeId, NodeInfo> implements Iterable<NodeId> {
     public void addEdge(NodeId fromNode, NodeId toNode) {
         Objects.requireNonNull(fromNode);
         Objects.requireNonNull(toNode);
-        if (hasCycleForAddEdge(fromNode, toNode)) {
-            throw new IllegalArgumentException(String.format("Edge(%s -> %s) has a cycle.", fromNode, toNode));
-        }
         edgeMap.put(fromNode, toNode, null);
     }
 
@@ -91,50 +95,25 @@ public class WorkflowGraph<NodeId, NodeInfo> implements Iterable<NodeId> {
         return getPrevNodes(node).size() > 1;
     }
 
-    public int toNextJoinNodeStep(NodeId node) {
-        Objects.requireNonNull(node);
-        int step = 0;
-        List<NodeId> nodes;
-        do {
-            nodes = getNextNodes(node);
-            if (nodes.size() == 1) {
-                step++;
-            }
-        } while (nodes.size() == 1);
-        return step;
-    }
-
-    public NodeId getStartNode() {
+    public List<NodeId> getStartNode() {
         List<NodeId> nodes = new ArrayList<>();
         for (NodeId node : nodeMap.keySet()) {
             if (getPrevNodes(node).isEmpty()) {
                 nodes.add(node);
             }
         }
-        if (nodes.isEmpty()) {
-            return null;
-        }
-        if (nodes.size() != 1) {
-            throw new IllegalStateException(String.format("There can only be one start node(size=%s) in graph.", nodes.size()));
-        }
-        return nodes.get(0);
+        return nodes;
     }
 
 
-    public NodeId getEndNode() {
+    public List<NodeId> getEndNode() {
         List<NodeId> nodes = new ArrayList<>();
         for (NodeId node : nodeMap.keySet()) {
             if (getNextNodes(node).isEmpty()) {
                 nodes.add(node);
             }
         }
-        if (nodes.isEmpty()) {
-            return null;
-        }
-        if (nodes.size() > 1) {
-            throw new IllegalStateException(String.format("There can only be one end node(size=%s) in graph.", nodes.size()));
-        }
-        return nodes.get(0);
+        return nodes;
     }
 
 
@@ -162,24 +141,35 @@ public class WorkflowGraph<NodeId, NodeInfo> implements Iterable<NodeId> {
         return nodes;
     }
 
-
-    private boolean hasCycleForAddEdge(NodeId fromNode, NodeId toNode) {
+    public boolean hasCycle() {
         Queue<NodeId> queue = new LinkedList<>();
-        queue.add(toNode);
+        Map<NodeId, Integer> notZeroInDegreeNodeMap = new HashMap<>();
 
-        int nodeCount = this.getNodeCount();
-        while (!queue.isEmpty() && (--nodeCount > 0)) {
-            NodeId node = queue.poll();
-
-            for (NodeId nextNode : getNextNodes(node)) {
-                if (nextNode.equals(fromNode)) {
-                    return true;
-                }
-                queue.add(nextNode);
+        for (NodeId node : nodeMap.keySet()) {
+            int inDegree = getPrevNodes(node).size();
+            if (inDegree == 0) {
+                queue.add(node);
+            } else {
+                notZeroInDegreeNodeMap.put(node, inDegree);
             }
         }
 
-        return false;
+        while(!queue.isEmpty()) {
+            NodeId node = queue.poll();
+            List<NodeId> nextNodes = getNextNodes(node);
+            for (NodeId nextNode : nextNodes) {
+                Integer inDegree = notZeroInDegreeNodeMap.get(nextNode);
+                inDegree--;
+                if (inDegree == 0) {
+                    queue.offer(nextNode);
+                    notZeroInDegreeNodeMap.remove(nextNode);
+                } else {
+                    notZeroInDegreeNodeMap.put(nextNode, inDegree);
+                }
+            }
+        }
+
+        return !notZeroInDegreeNodeMap.isEmpty();
     }
 
     @Override
@@ -190,7 +180,7 @@ public class WorkflowGraph<NodeId, NodeInfo> implements Iterable<NodeId> {
     private class GraphItr implements Iterator<NodeId> {
 
         private Queue<NodeId> queue = new LinkedList<>();
-        private Map<NodeId, Integer> notZeroIndegreeNodeMap = new HashMap<>();
+        private Map<NodeId, Integer> notZeroInDegreeNodeMap = new HashMap<>();
 
         GraphItr() {
             for (NodeId node : nodeMap.keySet()) {
@@ -198,7 +188,7 @@ public class WorkflowGraph<NodeId, NodeInfo> implements Iterable<NodeId> {
                 if (inDegree == 0) {
                     queue.add(node);
                 } else {
-                    notZeroIndegreeNodeMap.put(node, inDegree);
+                    notZeroInDegreeNodeMap.put(node, inDegree);
                 }
             }
         }
@@ -210,22 +200,22 @@ public class WorkflowGraph<NodeId, NodeInfo> implements Iterable<NodeId> {
         public NodeId next() {
             NodeId node = queue.poll();
             List<NodeId> nextNodes = getNextNodes(node);
-//            for (NodeId nextNode : nextNodes) {
-//                Integer inDegree = notZeroIndegreeNodeMap.get(nextNode);
-//                inDegree--;
-//                if (inDegree == 0) {
-//                    queue.offer(nextNode);
-//                    notZeroIndegreeNodeMap.remove(nextNode);
-//                } else {
-//                    notZeroIndegreeNodeMap.put(nextNode, inDegree);
-//                }
-//            }
+            for (NodeId nextNode : nextNodes) {
+                Integer inDegree = notZeroInDegreeNodeMap.get(nextNode);
+                inDegree--;
+                if (inDegree == 0) {
+                    queue.offer(nextNode);
+                    notZeroInDegreeNodeMap.remove(nextNode);
+                } else {
+                    notZeroInDegreeNodeMap.put(nextNode, inDegree);
+                }
+            }
             return node;
         }
     }
 
     public static void main(String[] args) {
-        WorkflowGraph<String, String> graph = new WorkflowGraph<>();
+        Digraph<String, String> graph = new Digraph<>();
         graph.addNode("AAAA.A", "startNode");
         graph.addNode("AAAB.A", "node1");
         graph.addNode("AAAC.A", "node1");
@@ -238,8 +228,9 @@ public class WorkflowGraph<NodeId, NodeInfo> implements Iterable<NodeId> {
         graph.addEdge("AAAC.A", "ZZZZ.Z");
 
         // add cycle
-        graph.addEdge("AAAB.A", "AAAA.A");
+//        graph.addEdge("AAAB.A", "AAAA.A");
 
+        System.out.println(graph.hasCycle());
         System.out.println(graph.getStartNode());
         System.out.println(graph.getEndNode());
         System.out.println(graph.getPrevNodes("AAAA.A"));
